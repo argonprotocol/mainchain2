@@ -1,10 +1,9 @@
-use crate::{tick::Tick, Balance, ObligationId};
+use crate::{tick::Tick, Balance};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{CloneNoBound, EqNoBound, Parameter, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_application_crypto::AppCrypto;
-use sp_arithmetic::FixedU128;
 use sp_core::{
 	crypto::{CryptoTypeId, KeyTypeId},
 	OpaquePeerId, H256,
@@ -71,12 +70,10 @@ pub struct MiningRegistration<
 > {
 	pub account_id: AccountId,
 	pub reward_destination: RewardDestination<AccountId>,
-	pub obligation_id: Option<ObligationId>,
 	#[codec(compact)]
-	pub bonded_argons: Balance,
+	pub bid: Balance,
 	#[codec(compact)]
 	pub argonots: Balance,
-	pub reward_sharing: Option<RewardSharing<AccountId>>,
 	pub authority_keys: Keys,
 	#[codec(compact)]
 	pub cohort_id: CohortId,
@@ -96,26 +93,6 @@ pub struct MiningSlotConfig {
 	/// The tick when bidding will start (eg, Slot "1")
 	#[codec(compact)]
 	pub slot_bidding_start_after_ticks: Tick,
-}
-
-/// An struct to define a reward sharing split with another account
-#[derive(
-	PartialEq,
-	Eq,
-	Copy,
-	Clone,
-	Encode,
-	Decode,
-	RuntimeDebug,
-	TypeInfo,
-	MaxEncodedLen,
-	Deserialize,
-	Serialize,
-)]
-pub struct RewardSharing<AccountId> {
-	pub account_id: AccountId,
-	#[codec(compact)]
-	pub percent_take: FixedU128,
 }
 
 /// A destination account for validator rewards

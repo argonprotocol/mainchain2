@@ -52,7 +52,6 @@ import type {
   PalletBalancesAdjustmentDirection,
   PalletIsmpUtilsFundMessageParams,
   PalletIsmpUtilsUpdateConsensusState,
-  PalletMiningSlotMiningSlotBid,
   PalletMultisigTimepoint,
   PalletPriceIndexPriceIndex,
   PalletTokenGatewayAssetRegistration,
@@ -625,15 +624,13 @@ declare module '@polkadot/api-base/types/submittable' {
     miningSlot: {
       /**
        * Submit a bid for a mining slot in the next cohort. Once all spots are filled in a slot,
-       * a slot can be supplanted by supplying a higher number of Bonded Argons. Bonded Argon
-       * terms can be found in the `vaults` pallet. You will supply the amount and the
-       * vault id to work with.
+       * a slot can be supplanted by supplying a higher bid.
        *
        * Each slot has `MaxCohortSize` spots available.
        *
-       * To be eligible for a slot, you must have the required ownership tokens in this account.
-       * The required amount is calculated as a percentage of the total ownership tokens in the
-       * network. This percentage is adjusted before the beginning of each slot.
+       * To be eligible for a slot, you must have the required ownership tokens (argonots) in
+       * this account. The required amount is calculated as a percentage of the total ownership
+       * tokens in the network. This percentage is adjusted before the beginning of each slot.
        *
        * If your bid is no longer winning, a `SlotBidderOut` event will be emitted. By monitoring
        * for this event, you will be able to ensure your bid is accepted.
@@ -644,24 +641,14 @@ declare module '@polkadot/api-base/types/submittable' {
        * The slot duration can be calculated as `BlocksBetweenSlots * MaxMiners / MaxCohortSize`.
        *
        * Parameters:
-       * - `bonded_argons`: The information to submit for the bid. If `None`, the bid will be
-       * considered a zero-bid.
-       * - `vault_id`: The vault id to used. Terms are taken from the vault at time of bid
-       * inclusion in the block.
-       * - `amount`: The amount to reserve from the vault.
+       * - `bid`: The amount of argons to bid
        * - `reward_destination`: The account_id for the mining rewards, or `Owner` for the
        * submitting user.
        * - `keys`: The session "hot" keys for the slot (BlockSealAuthorityId and GrandpaId).
        **/
       bid: AugmentedSubmittable<
         (
-          bondedArgons:
-            | Option<PalletMiningSlotMiningSlotBid>
-            | null
-            | Uint8Array
-            | PalletMiningSlotMiningSlotBid
-            | { vaultId?: any; amount?: any }
-            | string,
+          bid: u128 | AnyNumber | Uint8Array,
           rewardDestination:
             | ArgonPrimitivesBlockSealRewardDestination
             | { Owner: any }
@@ -675,7 +662,7 @@ declare module '@polkadot/api-base/types/submittable' {
             | Uint8Array,
         ) => SubmittableExtrinsic<ApiType>,
         [
-          Option<PalletMiningSlotMiningSlotBid>,
+          u128,
           ArgonPrimitivesBlockSealRewardDestination,
           ArgonRuntimeSessionKeys,
         ]
@@ -1973,9 +1960,9 @@ declare module '@polkadot/api-base/types/submittable' {
             | PalletVaultsVaultConfig
             | {
                 terms?: any;
-                bitcoinAmountAllocated?: any;
+                lockedBitcoinArgonsAllocated?: any;
                 bitcoinXpubkey?: any;
-                bondedArgonsAllocated?: any;
+                bondedBitcoinArgonsAllocated?: any;
                 addedSecuritizationPercent?: any;
               }
             | string
@@ -1996,8 +1983,8 @@ declare module '@polkadot/api-base/types/submittable' {
       modifyFunding: AugmentedSubmittable<
         (
           vaultId: u32 | AnyNumber | Uint8Array,
-          totalMiningAmountOffered: u128 | AnyNumber | Uint8Array,
-          totalBitcoinAmountOffered: u128 | AnyNumber | Uint8Array,
+          totalBondedBitcoinAmountOffered: u128 | AnyNumber | Uint8Array,
+          totalLockedBitcoinAmountOffered: u128 | AnyNumber | Uint8Array,
           addedSecuritizationPercent: u128 | AnyNumber | Uint8Array,
         ) => SubmittableExtrinsic<ApiType>,
         [u32, u128, u128, u128]
@@ -2011,13 +1998,7 @@ declare module '@polkadot/api-base/types/submittable' {
           vaultId: u32 | AnyNumber | Uint8Array,
           terms:
             | ArgonPrimitivesVaultVaultTerms
-            | {
-                bitcoinAnnualPercentRate?: any;
-                bitcoinBaseFee?: any;
-                bondedArgonsAnnualPercentRate?: any;
-                bondedArgonsBaseFee?: any;
-                miningRewardSharingPercentTake?: any;
-              }
+            | { bitcoinAnnualPercentRate?: any; bitcoinBaseFee?: any }
             | string
             | Uint8Array,
         ) => SubmittableExtrinsic<ApiType>,

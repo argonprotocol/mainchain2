@@ -6,12 +6,11 @@ use sp_runtime::{traits::IdentityLookup, BuildStorage, FixedU128};
 use crate as pallet_block_rewards;
 use crate::GrowthPath;
 use argon_primitives::{
-	block_seal::{BlockPayout, RewardSharing},
+	block_seal::BlockPayout,
 	notary::{NotaryProvider, NotarySignature},
 	tick::{Tick, Ticker},
 	BlockRewardAccountsProvider, BlockRewardsEventHandler, BlockSealerInfo, BlockSealerProvider,
-	NotaryId, NotebookNumber, NotebookProvider, NotebookSecret, RewardShare, TickProvider,
-	VotingSchedule,
+	NotaryId, NotebookNumber, NotebookProvider, NotebookSecret, TickProvider, VotingSchedule,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -91,7 +90,6 @@ parameter_types! {
 	pub static NotebookTick: Tick = 0;
 	pub static ElapsedTicks: Tick = 0;
 
-	pub static GetRewardSharing: Option<RewardSharing<u64>> = None;
 	pub static NotebooksInBlock: Vec<(NotaryId, NotebookNumber, Tick)> = vec![];
 
 	pub static BlockSealer:BlockSealerInfo<u64> = BlockSealerInfo {
@@ -146,16 +144,11 @@ impl NotebookProvider for TestProvider {
 
 pub struct StaticBlockRewardAccountsProvider;
 impl BlockRewardAccountsProvider<u64> for StaticBlockRewardAccountsProvider {
-	fn get_rewards_account(author: &u64) -> (Option<u64>, Option<RewardSharing<u64>>) {
-		let res = GetRewardSharing::get();
-		if let Some(delegate) = res {
-			(Some(*author), Some(delegate))
-		} else {
-			(None, None)
-		}
+	fn get_rewards_account(author: &u64) -> Option<u64> {
+		Some(*author)
 	}
 
-	fn get_all_rewards_accounts() -> Vec<(u64, Option<RewardShare>)> {
+	fn get_all_rewards_accounts() -> Vec<u64> {
 		todo!("not used by rewards")
 	}
 	fn is_compute_block_eligible_for_rewards() -> bool {
