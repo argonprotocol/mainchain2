@@ -5,7 +5,7 @@ use crate::{
 		AuthorityHashByIndex, AuthorityIdToMinerId, HistoricalBidsPerSlot, IsNextSlotBiddingOpen,
 		LastActivatedCohortId, MiningConfig, NextSlotCohort,
 	},
-	Error, Event, HoldReason,
+	Error, Event, HoldReason, Registration,
 };
 use argon_primitives::{
 	block_seal::{MiningAuthority, MiningBidStats, MiningRegistration, RewardDestination},
@@ -38,6 +38,7 @@ fn it_doesnt_add_cohorts_until_time() {
 			reward_destination: RewardDestination::Owner,
 			authority_keys: 1.into(),
 			cohort_id: 1,
+			external_funding_account: None
 		}]);
 
 		MiningSlots::on_initialize(1);
@@ -161,7 +162,8 @@ fn extends_bidding_if_mining_slot_extends() {
 			RuntimeOrigin::signed(1),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		MiningConfig::<Test>::mutate(|a| {
 			a.slot_bidding_start_after_ticks = 21_000;
@@ -171,7 +173,8 @@ fn extends_bidding_if_mining_slot_extends() {
 			RuntimeOrigin::signed(2),
 			0,
 			RewardDestination::Owner,
-			2.into()
+			2.into(),
+			None
 		));
 
 		current_tick += 1440;
@@ -238,6 +241,7 @@ fn it_adds_new_cohorts_on_block() {
 					reward_destination: RewardDestination::Owner,
 					authority_keys: account_id.into(),
 					cohort_id: i as u64 + 1,
+					external_funding_account: None,
 				},
 			);
 			AccountIndexLookup::<Test>::insert(account_id, i);
@@ -257,6 +261,7 @@ fn it_adds_new_cohorts_on_block() {
 			reward_destination: RewardDestination::Owner,
 			authority_keys: 1.into(),
 			cohort_id: 5,
+			external_funding_account: None,
 		}]);
 
 		NextSlotCohort::<Test>::set(cohort.clone());
@@ -355,6 +360,7 @@ fn it_releases_argonots_when_a_window_closes() {
 					reward_destination: RewardDestination::Owner,
 					authority_keys: 1.into(),
 					cohort_id: 1,
+					external_funding_account: None,
 				},
 			);
 			AccountIndexLookup::<Test>::insert(account_id, i);
@@ -367,7 +373,8 @@ fn it_releases_argonots_when_a_window_closes() {
 			RuntimeOrigin::signed(2),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 
 		CurrentTick::set(8);
@@ -387,6 +394,7 @@ fn it_releases_argonots_when_a_window_closes() {
 					reward_destination: RewardDestination::Owner,
 					authority_keys: 1.into(),
 					cohort_id: 4,
+					external_funding_account: None,
 				}]),
 			}
 			.into(),
@@ -426,7 +434,7 @@ fn it_holds_ownership_tokens_for_a_slot() {
 		System::set_block_number(6);
 
 		assert_err!(
-			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into(), None),
 			Error::<Test>::SlotNotTakingBids
 		);
 
@@ -439,7 +447,7 @@ fn it_holds_ownership_tokens_for_a_slot() {
 		ArgonotsPerMiningSeat::<Test>::set(share_amount);
 
 		assert_err!(
-			MiningSlots::bid(RuntimeOrigin::signed(1), 0, RewardDestination::Owner, 1.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(1), 0, RewardDestination::Owner, 1.into(), None),
 			Error::<Test>::InsufficientOwnershipTokens
 		);
 
@@ -449,7 +457,8 @@ fn it_holds_ownership_tokens_for_a_slot() {
 			RuntimeOrigin::signed(1),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		System::assert_last_event(
 			Event::SlotBidderAdded { account_id: 1, bid_amount: 0u32.into(), index: 0 }.into(),
@@ -462,7 +471,8 @@ fn it_holds_ownership_tokens_for_a_slot() {
 			RuntimeOrigin::signed(1),
 			1_000_000u32.into(),
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		assert_eq!(
 			NextSlotCohort::<Test>::get().iter().map(|a| a.account_id).collect::<Vec<_>>(),
@@ -495,7 +505,13 @@ fn it_wont_accept_bids_until_bidding_starts() {
 
 			MiningSlots::on_initialize(i);
 			assert_err!(
-				MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into()),
+				MiningSlots::bid(
+					RuntimeOrigin::signed(2),
+					0,
+					RewardDestination::Owner,
+					1.into(),
+					None
+				),
 				Error::<Test>::SlotNotTakingBids
 			);
 		}
@@ -510,7 +526,8 @@ fn it_wont_accept_bids_until_bidding_starts() {
 			RuntimeOrigin::signed(2),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 	});
 }
@@ -541,7 +558,8 @@ fn it_wont_let_you_reuse_ownership_tokens_for_two_bids() {
 			RuntimeOrigin::signed(1),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		System::set_block_number(16);
 		CurrentTick::set(16);
@@ -559,6 +577,7 @@ fn it_wont_let_you_reuse_ownership_tokens_for_two_bids() {
 					reward_destination: RewardDestination::Owner,
 					authority_keys: 1.into(),
 					cohort_id: 4,
+					external_funding_account: None,
 				}]),
 			}
 			.into(),
@@ -574,7 +593,7 @@ fn it_wont_let_you_reuse_ownership_tokens_for_two_bids() {
 		assert_eq!(MiningSlots::get_next_slot_starting_index(), 0);
 
 		assert_err!(
-			MiningSlots::bid(RuntimeOrigin::signed(1), 0, RewardDestination::Owner, 1.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(1), 0, RewardDestination::Owner, 1.into(), None),
 			Error::<Test>::CannotRegisterOverlappingSessions
 		);
 		assert!(System::account_exists(&1));
@@ -596,7 +615,7 @@ fn it_will_order_bids() {
 		System::set_block_number(6);
 
 		assert_err!(
-			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into(), None),
 			Error::<Test>::SlotNotTakingBids
 		);
 
@@ -618,7 +637,8 @@ fn it_will_order_bids() {
 				RuntimeOrigin::signed(1),
 				100_000u32.into(),
 				RewardDestination::Owner,
-				1.into()
+				1.into(),
+				None
 			),
 			Error::<Test>::InvalidBidAmount
 		);
@@ -627,7 +647,8 @@ fn it_will_order_bids() {
 			RuntimeOrigin::signed(1),
 			1_000_000u32.into(),
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		System::assert_last_event(
 			Event::SlotBidderAdded { account_id: 1, bid_amount: 1_000_000u32.into(), index: 0 }
@@ -649,7 +670,8 @@ fn it_will_order_bids() {
 			RuntimeOrigin::signed(2),
 			2_000_000,
 			RewardDestination::Owner,
-			2.into()
+			2.into(),
+			None
 		));
 		assert_eq!(Balances::free_balance(2), 3_000_000);
 		assert_eq!(Balances::free_balance(bid_pool_account_id), 3_000_000);
@@ -676,7 +698,8 @@ fn it_will_order_bids() {
 			RuntimeOrigin::signed(3),
 			2_000_000,
 			RewardDestination::Owner,
-			3.into()
+			3.into(),
+			None
 		));
 		assert_eq!(Balances::free_balance(3), 3_000_000);
 		assert_eq!(
@@ -709,7 +732,8 @@ fn it_will_order_bids() {
 			RuntimeOrigin::signed(1),
 			3_000_000,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		assert_eq!(Balances::free_balance(1), 100_000);
 		assert_eq!(Balances::free_balance(bid_pool_account_id), 7_000_000);
@@ -771,6 +795,7 @@ fn it_will_order_bids() {
 						reward_destination: RewardDestination::Owner,
 						authority_keys: 1.into(),
 						cohort_id: 2,
+						external_funding_account: None,
 					},
 					MiningRegistration {
 						account_id: 2,
@@ -779,6 +804,7 @@ fn it_will_order_bids() {
 						reward_destination: RewardDestination::Owner,
 						authority_keys: 2.into(),
 						cohort_id: 2,
+						external_funding_account: None,
 					},
 				]),
 			}
@@ -808,7 +834,8 @@ fn handles_a_max_of_bids_per_block() {
 			RuntimeOrigin::signed(1),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		assert_eq!(HistoricalBidsPerSlot::<Test>::get().into_inner()[0].clone().bids_count, 1);
 		assert_eq!(AuthorityIdToMinerId::<Test>::get::<UintAuthorityId>(1.into()), Some(1));
@@ -817,20 +844,21 @@ fn handles_a_max_of_bids_per_block() {
 			Event::SlotBidderAdded { account_id: 1, bid_amount: 0u32.into(), index: 0 }.into(),
 		);
 		assert_err!(
-			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into(), None),
 			Error::<Test>::CannotRegisterDuplicateKeys
 		);
 		assert_ok!(MiningSlots::bid(
 			RuntimeOrigin::signed(2),
 			0,
 			RewardDestination::Owner,
-			2.into()
+			2.into(),
+			None
 		));
 		System::assert_last_event(
 			Event::SlotBidderAdded { account_id: 2, bid_amount: 0u32.into(), index: 1 }.into(),
 		);
 		assert_noop!(
-			MiningSlots::bid(RuntimeOrigin::signed(3), 0, RewardDestination::Owner, 3.into()),
+			MiningSlots::bid(RuntimeOrigin::signed(3), 0, RewardDestination::Owner, 3.into(), None),
 			Error::<Test>::BidTooLow,
 		);
 		// should not have changed
@@ -841,6 +869,136 @@ fn handles_a_max_of_bids_per_block() {
 		for i in 1..5 {
 			assert!(System::account_exists(&i));
 		}
+	});
+}
+
+#[test]
+fn it_allows_bids_from_an_external_funding_account() {
+	TicksBetweenSlots::set(3);
+	MaxMiners::set(6);
+	MaxCohortSize::set(2);
+	ExistentialDeposit::set(100_000);
+	let bid_pool_account_id = BidPoolAccountId::get();
+
+	new_test_ext().execute_with(|| {
+		ElapsedTicks::set(6);
+		CurrentTick::set(6);
+		System::set_block_number(6);
+
+		assert_err!(
+			MiningSlots::bid(RuntimeOrigin::signed(2), 0, RewardDestination::Owner, 1.into(), None),
+			Error::<Test>::SlotNotTakingBids
+		);
+
+		ArgonotsPerMiningSeat::<Test>::set(100_000);
+		SlotBiddingStartAfterTicks::set(0);
+		IsNextSlotBiddingOpen::<Test>::set(true);
+
+		set_ownership(1, 300_000);
+		set_argons(1, 5_100_000);
+
+		System::set_block_number(1);
+
+		assert_ok!(MiningSlots::bid(
+			RuntimeOrigin::signed(1),
+			1_000_000,
+			RewardDestination::Owner,
+			1.into(),
+			Some(2)
+		));
+		assert_eq!(Ownership::balance_on_hold(&HoldReason::RegisterAsMiner.into(), &1), 100_000);
+		assert_eq!(Balances::free_balance(&bid_pool_account_id), 1_000_000);
+		assert_eq!(Balances::free_balance(&1), 4_100_000);
+
+		// we bid as account 2
+		System::assert_last_event(
+			Event::SlotBidderAdded { account_id: 2, bid_amount: 1_000_000, index: 0 }.into(),
+		);
+		assert_eq!(
+			NextSlotCohort::<Test>::get().to_vec(),
+			vec![Registration::<Test> {
+				account_id: 2,
+				argonots: 100_000u32.into(),
+				bid: 1_000_000u32.into(),
+				reward_destination: RewardDestination::Owner,
+				authority_keys: 1.into(),
+				cohort_id: 1,
+				external_funding_account: Some(1),
+			}]
+		);
+
+		// bid again as account 3
+
+		assert_err!(
+			MiningSlots::bid(
+				RuntimeOrigin::signed(1),
+				1_000_000,
+				RewardDestination::Owner,
+				1.into(),
+				Some(3)
+			),
+			Error::<Test>::CannotRegisterDuplicateKeys
+		);
+
+		assert_ok!(MiningSlots::bid(
+			RuntimeOrigin::signed(1),
+			2_000_000,
+			RewardDestination::Owner,
+			3.into(),
+			Some(3)
+		));
+		assert_eq!(Ownership::balance_on_hold(&HoldReason::RegisterAsMiner.into(), &1), 200_000);
+		assert_eq!(Balances::free_balance(&bid_pool_account_id), 3_000_000);
+		assert_eq!(Balances::free_balance(&1), 2_100_000);
+		System::assert_last_event(
+			Event::SlotBidderAdded { account_id: 3, bid_amount: 2_000_000, index: 0 }.into(),
+		);
+		assert_eq!(
+			NextSlotCohort::<Test>::get().to_vec(),
+			vec![
+				Registration::<Test> {
+					account_id: 3,
+					argonots: 100_000u32.into(),
+					bid: 2_000_000u32.into(),
+					reward_destination: RewardDestination::Owner,
+					authority_keys: 3.into(),
+					cohort_id: 1,
+					external_funding_account: Some(1),
+				},
+				Registration::<Test> {
+					account_id: 2,
+					argonots: 100_000u32.into(),
+					bid: 1_000_000u32.into(),
+					reward_destination: RewardDestination::Owner,
+					authority_keys: 1.into(),
+					cohort_id: 1,
+					external_funding_account: Some(1),
+				}
+			]
+		);
+
+		// overflow
+		assert_ok!(MiningSlots::bid(
+			RuntimeOrigin::signed(1),
+			2_000_000,
+			RewardDestination::Owner,
+			4.into(),
+			Some(4)
+		));
+		assert_eq!(Ownership::balance_on_hold(&HoldReason::RegisterAsMiner.into(), &1), 300_000);
+		assert_eq!(Balances::free_balance(&bid_pool_account_id), 5_000_000);
+		assert_eq!(Balances::free_balance(&1), 100_000);
+
+		// now close the bids and ensure funds go back to the right wallet
+
+		ElapsedTicks::set(8);
+		CurrentTick::set(8);
+		System::set_block_number(8);
+		MiningSlots::on_initialize(8);
+		assert_eq!(Balances::free_balance(&bid_pool_account_id), 4_000_000);
+		assert_eq!(Balances::free_balance(&1), 1_100_000);
+		assert_eq!(Ownership::balance_on_hold(&HoldReason::RegisterAsMiner.into(), &1), 200_000);
+		assert_eq!(Ownership::free_balance(&1), 100_000);
 	});
 }
 
@@ -869,6 +1027,7 @@ fn it_can_get_closest_authority() {
 					reward_destination: RewardDestination::Owner,
 					authority_keys: account_id.into(),
 					cohort_id: 1,
+					external_funding_account: None,
 				},
 			);
 			AccountIndexLookup::<Test>::insert(account_id, i);
@@ -1056,7 +1215,8 @@ fn it_doesnt_accept_bids_until_first_slot() {
 			RuntimeOrigin::signed(2),
 			0,
 			RewardDestination::Owner,
-			1.into()
+			1.into(),
+			None
 		));
 		assert_eq!(ActiveMinersCount::<Test>::get(), 0);
 

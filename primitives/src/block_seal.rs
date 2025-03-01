@@ -68,13 +68,21 @@ pub struct MiningRegistration<
 	Balance: Parameter + MaxEncodedLen,
 	Keys: OpaqueKeys + Parameter,
 > {
+	/// The account id the miner will operate as
 	pub account_id: AccountId,
+	/// The account that bids and argonots come from
+	pub external_funding_account: Option<AccountId>,
+	/// The account that rewards are paid to
 	pub reward_destination: RewardDestination<AccountId>,
+	/// How much was bid for the mining slot
 	#[codec(compact)]
 	pub bid: Balance,
+	/// The argonots put on hold to run a mining seat
 	#[codec(compact)]
 	pub argonots: Balance,
+	/// The signing keys for the miner
 	pub authority_keys: Keys,
+	/// Which cohort the miner is in
 	#[codec(compact)]
 	pub cohort_id: CohortId,
 }

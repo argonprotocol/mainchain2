@@ -101,6 +101,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for InnerMigrate<T> {
 			.into_iter()
 			.map(|x| Registration::<T> {
 				account_id: x.account_id,
+				external_funding_account: None,
 				reward_destination: x.reward_destination,
 				bid: x.bonded_argons,
 				argonots: x.argonots,
@@ -114,6 +115,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for InnerMigrate<T> {
 			count += 1;
 			Some(Registration::<T> {
 				account_id: reg.account_id,
+				external_funding_account: None,
 				reward_destination: reg.reward_destination,
 				bid: reg.bonded_argons,
 				argonots: reg.argonots,

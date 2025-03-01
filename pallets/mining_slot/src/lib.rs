@@ -22,6 +22,7 @@ use frame_support::{
 		tokens::{Fortitude, Precision, Preservation},
 	},
 };
+use log::info;
 pub use pallet::*;
 use sp_core::{Get, U256};
 use sp_io::hashing::blake2_256;
@@ -80,14 +81,12 @@ pub mod pallet {
 		BoundedBTreeMap, Percent,
 	};
 
+	use super::*;
 	use argon_primitives::{
 		block_seal::{MiningRegistration, RewardDestination},
-		prelude::*,
 		vault::BondedBitcoinsBidPoolProvider,
 		TickProvider,
 	};
-
-	use super::*;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
@@ -395,6 +394,8 @@ pub mod pallet {
 		/// - `reward_destination`: The account_id for the mining rewards, or `Owner` for the
 		///   submitting user.
 		/// - `keys`: The session "hot" keys for the slot (BlockSealAuthorityId and GrandpaId).
+		/// - `mining_account_id`: This account_id allows you to operate as this miner account id,
+		///   but use funding (argonots and bid) from the submitting account
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)] //T::WeightInfo::hold())]
 		pub fn bid(
@@ -402,8 +403,10 @@ pub mod pallet {
 			bid: T::Balance,
 			reward_destination: RewardDestination<T::AccountId>,
 			keys: T::Keys,
+			mining_account_id: Option<T::AccountId>,
 		) -> DispatchResult {
-			let miner_account = ensure_signed(origin)?;
+			let funding_account = ensure_signed(origin)?;
+			let miner_account_id = mining_account_id.unwrap_or(funding_account.clone());
 
 			ensure!(IsNextSlotBiddingOpen::<T>::get(), Error::<T>::SlotNotTakingBids);
 			ensure!(
@@ -415,10 +418,10 @@ pub mod pallet {
 				.get::<T::MiningAuthorityId>(T::MiningAuthorityId::ID)
 				.ok_or(Error::<T>::InvalidKeyFormat)?;
 			if let Some(registrant) = AuthorityIdToMinerId::<T>::get(&miner_authority_id) {
-				ensure!(registrant == miner_account, Error::<T>::CannotRegisterDuplicateKeys);
+				ensure!(registrant == miner_account_id, Error::<T>::CannotRegisterDuplicateKeys);
 			}
 
-			if let Some(current_index) = <AccountIndexLookup<T>>::get(&miner_account) {
+			if let Some(current_index) = <AccountIndexLookup<T>>::get(&miner_account_id) {
 				let cohort_start_index = Self::get_next_slot_starting_index();
 				let is_in_next_cohort = current_index >= cohort_start_index &&
 					current_index < (cohort_start_index + T::MaxCohortSize::get());
@@ -427,14 +430,14 @@ pub mod pallet {
 				ensure!(is_in_next_cohort, Error::<T>::CannotRegisterOverlappingSessions);
 			}
 
-			Self::send_argons_to_pool(&miner_account, bid)?;
+			Self::send_argons_to_pool(&funding_account, bid)?;
 
-			let current_registration = Self::get_active_registration(&miner_account);
-			let ownership_tokens = Self::hold_argonots(&miner_account, current_registration)?;
+			let current_registration = Self::get_active_registration(&miner_account_id);
+			let ownership_tokens = Self::hold_argonots(&funding_account, current_registration)?;
 			let next_cohort_id = LastActivatedCohortId::<T>::get().saturating_add(1);
 			<NextSlotCohort<T>>::try_mutate(|cohort| -> DispatchResult {
 				if let Some(existing_position) =
-					cohort.iter().position(|x| x.account_id == miner_account)
+					cohort.iter().position(|x| x.account_id == miner_account_id)
 				{
 					cohort.remove(existing_position);
 				}
@@ -463,8 +466,13 @@ pub mod pallet {
 					.try_insert(
 						pos,
 						MiningRegistration {
-							account_id: miner_account.clone(),
+							account_id: miner_account_id.clone(),
 							reward_destination,
+							external_funding_account: if miner_account_id == funding_account {
+								None
+							} else {
+								Some(funding_account)
+							},
 							bid,
 							argonots: ownership_tokens,
 							authority_keys: keys,
@@ -486,10 +494,10 @@ pub mod pallet {
 				});
 				AuthorityIdToMinerId::<T>::insert(
 					miner_authority_id.clone(),
-					miner_account.clone(),
+					miner_account_id.clone(),
 				);
 				Self::deposit_event(Event::<T>::SlotBidderAdded {
-					account_id: miner_account.clone(),
+					account_id: miner_account_id.clone(),
 					bid_amount: bid,
 					index: UniqueSaturatedInto::<u32>::unique_saturated_into(pos),
 				});
@@ -784,6 +792,7 @@ impl<T: Config> Pallet<T> {
 				let threshold = U256::MAX / U256::from(ticks_before_close);
 
 				if vrf < threshold {
+					info!("VRF Close triggered: {:?} < {:?}", vrf, threshold);
 					let cohort_id = LastActivatedCohortId::<T>::get() + 1;
 					let end_tick = Self::get_next_slot_tick() + Self::mining_window_ticks();
 					Self::deposit_event(Event::<T>::MiningBidsClosed { cohort_id });
@@ -959,6 +968,9 @@ impl<T: Config> Pallet<T> {
 	) {
 		let account_id = active_registration.account_id;
 
+		let funding_account =
+			active_registration.external_funding_account.unwrap_or(account_id.clone());
+
 		let mut preserved_argonot_hold = true;
 		if !is_registered_for_next {
 			preserved_argonot_hold = false;
@@ -970,8 +982,15 @@ impl<T: Config> Pallet<T> {
 				AuthorityIdToMinerId::<T>::remove(authority_id);
 			}
 
-			if let Err(e) = Self::release_argonots_hold(&account_id, active_registration.argonots) {
-				log::error!("Failed to release argonots from account {:?}. {:?}", account_id, e,);
+			if let Err(e) =
+				Self::release_argonots_hold(&funding_account, active_registration.argonots)
+			{
+				log::error!(
+					"Failed to release argonots from funding account {:?} (account {:?}). {:?}",
+					funding_account,
+					account_id,
+					e,
+				);
 				Self::deposit_event(Event::<T>::ReleaseMinerSeatError {
 					account_id: account_id.clone(),
 					error: e,
@@ -987,13 +1006,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn release_failed_bid(registration: &Registration<T>) -> DispatchResult {
+		let funding_account = registration
+			.external_funding_account
+			.clone()
+			.unwrap_or(registration.account_id.clone());
 		let account_id = registration.account_id.clone();
 
 		if registration.bid > T::Balance::zero() {
 			let pool_account = T::BidPoolProvider::get_bid_pool_account();
 			T::ArgonCurrency::transfer(
 				&pool_account,
-				&account_id,
+				&funding_account,
 				registration.bid,
 				Preservation::Expendable,
 			)?;
@@ -1011,7 +1034,7 @@ impl<T: Config> Pallet<T> {
 			AuthorityIdToMinerId::<T>::remove(authority_id);
 		}
 
-		Self::release_argonots_hold(&account_id, argonots_to_unhold)?;
+		Self::release_argonots_hold(&funding_account, argonots_to_unhold)?;
 
 		Self::deposit_event(Event::<T>::SlotBidderDropped {
 			account_id,

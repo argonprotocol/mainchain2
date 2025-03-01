@@ -172,7 +172,7 @@ Tokens in circulation. And you can (optionally) put yourself ahead of someone el
 than they have. You will be refunded if you lose out on a slot.
 
 Your bids will go into a bid "pool" for your slot and paid to Vaults who have committed to backing the MiningSlot with
-Bonded Bitcoins. BondedBitcoins are created by a Vault when it locks bitcoins.
+"Bonded" Bitcoins.
 
 You need to set up an account and acquire Argons to bid for a mining slot.
 
@@ -210,8 +210,9 @@ rotate in. Over time, the number of miners will increase to 10,000.
 
 You are bidding for a slot, and can be outbid at any time by someone who "locks" more Argons than you. You can monitor
 if you currently have a winning slot by looking at
-the [Chain State](https://polkadot.js.org/apps/?rpc=wss://rpc.testnet.argonprotocol.org#/chainstate) under **miningSlot
-** -> **nextSlotCohort**. If you are in the top 10 of the `nextSlotCohort`, you have a winning bid. You can also
+the [Chain State](https://polkadot.js.org/apps/?rpc=wss://rpc.testnet.argonprotocol.org#/chainstate) under
+**miningSlot** -> **nextSlotCohort**. If you are in the top 10 of the `nextSlotCohort`, you have a winning bid. You can
+also
 monitor for events in each block matching `SlotBidderOut` to see if you have been outbid. (Events can be
 monitored programmatically using the `@argonprotocol/mainchain` node.js library, or using the `argon-client` rust
 library, which is a [`subxt`](https://github.com/paritytech/subxt) based rust library).
